@@ -2,8 +2,8 @@ import sys
 from datetime import datetime,date,timedelta
 
 # Előfeltétel:  "pip install hundate"
-from ezdate import text2date
-import ezdate as d
+from hundate.ezdate import text2date
+import hundate.ezdate as d
 
 # Összehasonlítási lehetőség a https://github.com/szegedai/hun-date-parser oldalról letölthető szoftverrel
 # - előfeltétel:   "pip install hun_date_parser"
@@ -14,13 +14,9 @@ try:
 except:
     bSzegedAI=False
 
-bSzegedAI=False
+#bSzegedAI=False
 
 
-
-#teszteset='rendszerváltás évében'
-#print(teszteset + '\n' +
-#      text2date(teszteset,outtype='first+'))
 
 
 def fn_print(címsor,tesztesetek,bSzegedAI):
