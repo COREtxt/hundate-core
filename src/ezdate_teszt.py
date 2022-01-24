@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime,date,timedelta
 
-# Előfeltétel:  "pip install ezdate"
+# Előfeltétel:  "pip install hundate"
 from ezdate import text2date
 import ezdate as d
 
