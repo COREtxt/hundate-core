@@ -1,7 +1,17 @@
+''' NLP modul for hungarian date-entity recognition and translation to specific date values
+NLP modul, magyar nyelvű dátum-kifejezések felismerése és lefordítása konkrét dátum-értékekre.
+A legfontosabb függvény a modulban:  text2date( )    (a többi függvény helper jellegű)
+Paraméterezési lehetőség:   lookup_text2dateG a modul végén (a leírást lásd a modul törzsrészében)
+Részletes leírás:  https://github.com/COREtxt/hundate-core
+''' 
+
 from datetime import datetime,date,timedelta
 from dateutil.relativedelta import relativedelta
 
-from ezhelper import *
+try:
+    from ezhelper import *
+except:
+    from .ezhelper import *     # ha csomagban van telepítve (pip install hundate)
 
 
 def fn_today(format='.'):
@@ -162,6 +172,7 @@ def text2date(text,dt0=None,tense='',outtype='first'):
         return (None,None)
 
 
+    # Generalizált mintázatok
     def sub_patterns(patternL,invaluesL,outvaluesL,dt0,patternword_előtte,patternword_utána):   # -> (date1, date2)  vagy None 
         # patternL:  szögletes zárójeles helyettesítőjelek (annotált szavak) és egyéb szavak lehetnek benne
         #     - a lehetséges helyettesítőjeleket a lookup_text2dateG tartalmazza (továbbá: [dátum])
@@ -1149,6 +1160,8 @@ def text2date(text,dt0=None,tense='',outtype='first'):
 #      - entityname:  szögletes zárójeles helyettesítőjelként kerül be a mintázatba  (kötelezően egyszavas)
 #         - az entityname lehet "none": ebben az esetben nem a helyettesítőjel íródik be a mintázatba, hanem az outvalue 
 #           (szabványosítás, szinonimák összevonása)
+#         - új entity-név bevezetése esetén a text2date függvény sub_patterns függvényében fel kell venni az entity-névre támaszkodó
+#           mintázatokat, és a hozzájuk tartozó interpretáló algortimust
 #      - outvalue:   a szabványosított / kivonatolt érték   (a mintázatot értelmező algoritmus támaszkodik rá)
 #         - "évnapja" esetén speciális kódolás:  
 #             "MMdd",  "MMdd:MMdd",  "húsvét-1", "húsvét-2:húsvét+1  (a húsvét helyébe húsvét vasárnap dátuma íródik)

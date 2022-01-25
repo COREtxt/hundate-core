@@ -1,56 +1,101 @@
+''' hundate tesztelése
+Példaszövegek megjelenítése a példákból kivonatolt dátumokkal.
+Ha a hun-date-parser is telepítve van, akkor összehasonlítási lehetőség.
+Kimenet:  console ablak
+Részletes leírás:  https://github.com/COREtxt/hundate-core
+'''
+
 import sys
 from datetime import datetime,date,timedelta
 
+print('HUNDATE TESZT')
+
+
 # Előfeltétel:  "pip install hundate"
-from hundate.ezdate import text2date
-import hundate.ezdate as d
+try:
+    from hundate.ezdate import text2date
+except:
+    # Installálás nélküli telepítési modell (a három fájl másolása egy tetszőleges mappába, majd a jelen fáj futtatása fájlkezelőből)
+    try:
+        from ezdate import text2date
+    except:
+        print('Nem sikerült elinditani a teszt programot.\n\n' +
+
+              'Két telepítési koreográfia alkalmazható:\n' +
+              'A változat: "pip install hundate" egy cmb-alakban, majd a jelen fájl futtatása közvetlenül a fájlkezelőből vagy python környezetből\n' +
+              'B változat: a három py fájl másolása egy tetszőleges mappába, majd a jelen fájl indítása fájlekezelőből (pl. kettős klikk)\n\n' +
+
+              'A python előzetes telepítése mindkét esetben szükséges (3.7 vagy későbbi)\n'
+              'Az "A" változat előnye, hogy a további szükséges python modulok telepítése vagy verzióváltása ' +
+                 'is automatikusan megtörténik (numpy, python-dateutil).')
+
 
 # Összehasonlítási lehetőség a https://github.com/szegedai/hun-date-parser oldalról letölthető szoftverrel
 # - előfeltétel:   "pip install hun_date_parser"
-# - ha nincs telepítve, akkor csak a tesztelés csak az ezdate kimeneti értékeit mutatja a felsorolt példákra 
+# - ha nincs telepítve, akkor a tesztelés csak a hundate kimeneti értékeit mutatja a felsorolt példákra 
 bSzegedAI=True     
 try:
     from hun_date_parser import text2datetime
 except:
     bSzegedAI=False
 
-#bSzegedAI=False
+
+
+#teszteset='rendszerváltás évében'
+#print(teszteset + '\n' +
+#      text2date(teszteset,outtype='first+'))
+
+#from ezhelper import *
+#t=stopperstart()
+#for i in range(100):
+#    text='február 24-én'
+#    nCount=10
+#    textL=''
+#    for j in range(nCount): textL=textL + ' ' + text
+#    result=text2date(textL)
+#stopper(t)
+#print(result + '\nSzavak száma: ' + str(len(textL.split())) )
+## 1-2 msec * minta szavainak száma (lineárisan nő a szavak számával)
+
+#input('\nBezárás: enter')
+#exit()
 
 
 
-
+# Függvény:  tesztek eredményének nyomtatás a konzolra
 def fn_print(címsor,tesztesetek,bSzegedAI):
+    ''' Tesztek eredményének nyomtatás a konzolra (összehasonlítás is kérhető a hun_date_parser alkalmazással)'''
     print('\n\n' + címsor + '\n')
     for teszt in tesztesetek:
         try:
-            coredate=text2date(teszt)
+            hundate_out=text2date(teszt)
         except:
-            coredate='(exception)'
+            hundate_out='(exception)'
 
         if bSzegedAI:
             try:
-                hundate=''
+                hundate_szeged=''
                 listL=text2datetime(teszt)
                 if len(listL)>0:
                     dictL=listL[0]
                     date1=dictL['start_date']
-                    hundate=date1.strftime('%Y.%m.%d')
+                    hundate_szeged=date1.strftime('%Y.%m.%d')
                     date2=dictL['end_date']
                     s2=date2.strftime('%Y.%m.%d')
-                    if s2>hundate: hundate=hundate + '-' + s2
+                    if s2>hundate_szeged: hundate_szeged=hundate_szeged + '-' + s2
             except:
-                hundate='(exception)'
+                hundate_szeged='(exception)'
             print('"' + teszt + '"\n' +
-                  '\t\t\t\t core:      ' + coredate + '\n' +
-                  '\t\t\t\t szeged:    ' + hundate)
+                  '\t\t\t\t hundate:   ' + hundate_out + '\n' +
+                  '\t\t\t\t szegedAI:  ' + hundate_szeged)
     
         else:
             teszt='"' + teszt + '"'
             if len(teszt)<30: teszt = teszt + ' '*(30-len(teszt))
-            print(teszt + '\t' +  coredate)
+            print(teszt + '\t' +  hundate_out)
 
 
-
+# Tesztesetek, kategóriánként csoportosítva
 fn_print('ELEMI DÁTUMKIFEJEZÉSEK',[
           'most',
           'mai napon',                 # ragozott alakok is jók  (pl. "mai napra", "mai napig", ...)
@@ -93,8 +138,6 @@ fn_print('HÉT NAPJAI, ÜNNEPNAPOK',[
           ],bSzegedAI)
 
 
-
-
 fn_print('IDŐSZAKOK',[
           '2015-ben',
           'februárban',                     # idén
@@ -114,7 +157,6 @@ fn_print('IDŐSZAKOK',[
           'március idusán',
           'a rendszerváltáskor'
           ],bSzegedAI)
-
 
 
 fn_print('JELEN MÚLT JÖVŐ',[
@@ -151,8 +193,6 @@ fn_print('JELEN MÚLT JÖVŐ',[
             ],bSzegedAI)
 
 
-
-
 fn_print('ELEJÉN KÖZEPÉN VÉGÉN, SORSZÁMOZOTT IDŐSZAKOK',[
             'a hét közepén',                # középső harmad (időszak)
             'jövő hét harmadik napján',   
@@ -176,7 +216,6 @@ fn_print('ELEJÉN KÖZEPÉN VÉGÉN, SORSZÁMOZOTT IDŐSZAKOK',[
             ],bSzegedAI)
 
 
-
 fn_print('UTÁN ELŐTT',[
             'múlt péntek előtt két héttel',             
             'jövő hétvége után két nappal',
@@ -190,16 +229,15 @@ fn_print('UTÁN ELŐTT',[
             ],bSzegedAI)
 
 
-
-
 fn_print('DÁTUMTÓL DÁTUMIG',[
             
-            '2015-2018','2015 és 2022 között',              # inkluzív, tehát a kezdő és a záró dátum is benne van
+            '2015-2018',                                    # inkluzív, tehát a kezdő és a záró dátum is benne van
+            '2015 és 2022 között',              
             '2022 előtt',                                   # 0001.01.01 a kezdődátum
             '2021 január 2-től 2024 április 3-ig',
             '2021.02.05 - 2021.04.03',
             '2021.02.05-10',
-            'februártól májusig',                           # inkluzv (május 31-ig)
+            'februártól májusig',                           # inkluzív (május 31-ig)
             'tavalyelőtt február 5 és 10 között',
             '2021 januártól 2024 áprilisig',
             '2021 januártól áprilisig',

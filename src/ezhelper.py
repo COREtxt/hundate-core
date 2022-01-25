@@ -1,3 +1,6 @@
+''' Alapszintű helper függvények:  stingkezelés (pl. text2int, d_annotate, d_lookup), tömbök és szótárak kezelése, fájlrendszer, debug
+''' 
+
 from time import process_time,perf_counter
 import os
 from itertools import groupby
