@@ -7,6 +7,9 @@ pip install hundate
 
 Előfeltétel:  Python 3.7 vagy későbbi
 
+Az ezdate_teszt.py fájl "pip install" nélkül is futtatható (github fájlok letöltés egy mappába, majd az ezdate_teszt.py indítása fájlkezelővel).
+Ebben az esetben azonban előfordulhat, hogy egyedi módon kell telepíteni további python modulokat (numpy, python-dateutil)
+
 ## Importálás
 - from hundate import ezdate\
    Hivatkozás: ezdate.text2date()
