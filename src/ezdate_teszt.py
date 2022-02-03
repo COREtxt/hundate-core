@@ -42,9 +42,21 @@ bSzegedAI = False
 
 
 
-# teszteset = 'az első pénteki napon'
-# out = text2date(teszteset, outtype='first+')
-# print(teszteset + '\n' + out)
+teszteset = 'jövő héten kedd vagy szerda'
+out = text2date(teszteset, outtype='all+')
+print(teszteset + '\n' + out)
+
+
+
+
+
+fn_printteszt('ISSUE1', [
+    'február 5. utáni első hétköznap',
+    'február 5 utáni első hétköznap',
+    'jövő héten kedd-szerda',
+    'halottak napja utáni szombat',
+    'jövő héten kedd vagy szerda'
+], bSzegedAI)
 
 
 
