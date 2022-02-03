@@ -204,7 +204,7 @@ def text2int(text,bSerialOk=True,bCleaned=False,tupleout=False):
         # lemmatizálás  (nem minden rag, elsősorban a dátumokban előforduló számokra van kiélezve)
         if 'dik' in text: text=endwith(text,'dika|dike|diki|dikai|dikei|dikan|diken|dikaig|dikeig|dikatol|diketol|dikos|dikes|dikas','dik')
         elif 'els' in text: text=endwith(text,'elsotol|elson|elsoig|elseje|elsejen|elsejei|elsejeig|elsejetol','elso')
-        else: text=endwith(text,'stol|sig|son|sen|sban|sben','s')
+        else: text=endwith(text,'stol|sig|son|sen|sban|sben','s')    # huszastól << huszas
         
         d={ 'elso':'egy','egyedik':'egy','egyes':'egy','masodik':'ketto','kettedik':'ketto','kettes':'ketto',
             'harmadik':'harom','harmas':'harom','negyedik':'negy','negyes':'negy',
@@ -458,7 +458,7 @@ def d_lookup(strIn,d_samples,tupleout=False,bWholesamples=True):
 
        
 
-def d_annotate(strIn,lookup,bNum=False,max_words_in_samples=1,accentlevel='soft'):    # -> pattern,invalues,outvalues
+def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,accentlevel='soft'):    # -> pattern,invalues,outvalues
     ''' Annotálás jellegű művelet. A szöveg mintázatát állítja elő.  
     A beazonosítható szövegrészek helyébe szögletes zárójelben az entity-nevét írja, az eredeti és a szabványosított értéket pedig 
         menti az invalues és outvalues tömbbe (a két tömb indexelése a pattern-be kerülő "[...]" helyettesítőjelekhez igazodik) 
@@ -471,16 +471,18 @@ def d_annotate(strIn,lookup,bNum=False,max_words_in_samples=1,accentlevel='soft'
                 A keresőminták több szavasak is lehetnek (trimmelve kell megadni)
                 Ha egy keresőminta végén pont van, akkor csak wholeword találat megengedett  (egyébként beginwith találat is jó)
         - [entity]:  entity-név (pl. "évszak"). Kötelezően egyszavas  ('_' lehet benne)  
-                Ugyanaz az entitás-név több startwords-höz is megadható.  Tetszőleges számú entitásnév lehet a lookup-ben.
-                "none" entitást kell megadni, ha csak szaványosításról illetve szinonimák összevonásáról van szó
+                Ugyanaz az entitás-név több startsamples-höz is megadható.  Tetszőleges számú entitásnév lehet a lookup-ben.
+                "none" entitást kell megadni, ha csak szabványosításról illetve szinonimák összevonásáról van szó
                   Példa:  "korábbi|előző":none,korábbi.     Ebben az esetben csere a szabványosított értékre, az outvalues-be nem kerül bele
                 "stopword" entitás-névvel kell felsorolni az elhagyandó szavakat (pl. névelők)
         - [value]:  ez az érték kerül be az outvalues-be (az adott entity névvel). Szabványosított / kivonatolt érték
                 Ha nincs megadva, akkor a talált startsample lesz a szabványosított érték
                 Lehet szám, dátum, string is.  String esetén több szavas is lehet (trimmelve kell megadni)
-    bNum:  True esetén a szöveges vagy numerikus szám-szavak annotálása "[szám]" entity-névvel (sorszámok és római számok is)
+    special:  példa: '[szám] [tólig]'   speciális beazonosítási eljárások felsorolása (a határolójel és a sorrend érdektelen)
+        [szám]:  a szöveges vagy numerikus szám-szavak annotálása "[szám]" entity-névvel (sorszámok és római számok is)
+        [tólig]:  a -tól -től -ig ragok leválasztása külön szóként (egybeírt és kötejeles írásmód esetén is)
     max_words_in_samples:  maximum hány szavas minták vannak a lookup-ben
-        - ha kisebb szám van megadva, akkor az ennél hosszabb minták nem fognak találatot adni 
+        - az ennél hosszabb (ennél több szóból álló) minták nem fognak találatot adni 
     accentlevel:     '': nincs összevonás,  'soft':  a-á, e-é, o-ö, u-ü nincs összevonva     'hard':  erős összevonás
       
 
@@ -512,8 +514,6 @@ def d_annotate(strIn,lookup,bNum=False,max_words_in_samples=1,accentlevel='soft'
         lookup=dict_compiled
     
 
-    dropchars=string.punctuation.replace('.','')        # a '.' karakteren kívüli összes írásjel
-
     strL=strIn
     # írásjelek helyett szóközök (kivéve '.')
     strL=strL.translate(str.maketrans(dropchars,' '*len(dropchars)))
@@ -523,6 +523,11 @@ def d_annotate(strIn,lookup,bNum=False,max_words_in_samples=1,accentlevel='soft'
     strL=strL.lower()
     strL=skipaccents(strL,accentlevel)
     
+    if '[tólig]' in special:
+        strL=re.sub(r'(-jétöl|-átol|-étöl|-tol|-töl|tol|töl)\b',r' tol',strL)
+        strL=re.sub(r'(-jéig|-áig|-éig|-ig|ig)\b',r' ig',strL)
+
+
     # trim
     words=strL.split()
 
@@ -538,7 +543,7 @@ def d_annotate(strIn,lookup,bNum=False,max_words_in_samples=1,accentlevel='soft'
     nLen=len(words)
     i=0
     while i<nLen:
-        if bNum:
+        if '[szám]' in special:
             word=words[i]     # a számoknál csak egyszavas keresés van
             if word!='hét':   # a "hét" szó helyébe ne írjon számot (összetéveszthető a "hét" időhatározóval)
                               # Később még ellenőrzöm, hogy ha [időtartam] a következő szó is, akkor [szám]-ra módosuljon az értelmezése (pl. "hét nap")
