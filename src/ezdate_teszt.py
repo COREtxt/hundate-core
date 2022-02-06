@@ -42,11 +42,10 @@ bSzegedAI = False
 
 
 
-teszteset = 'jövő héten kedd vagy szerda'
-out = text2date(teszteset, outtype='all+')
-print(teszteset + '\n' + out)
-
-
+# teszteset = '2021. II. 05'
+# out = text2date(teszteset, outtype='all+')
+# print(teszteset + '\n' + str(out))
+# exit()
 
 
 
@@ -62,32 +61,22 @@ fn_printteszt('ISSUE1', [
 
 # Tesztesetek, kategóriánként csoportosítva
 fn_printteszt('ELEMI DÁTUMKIFEJEZÉSEK', [
-    'most',
-    # ragozott alakok is jók  (pl. "mai napra", "mai napig", ...)
-    'mai napon',
-    'tegnap',
-    'tegnapelőtt',
-    'tegnap előtt',              # külön írt változat is jó
-    # a kisbetű-nagybetű és a rövid-hosszú ékezet vagy a szóközök és irásejelek eltérése nem jelent problémát
-    'Tegnapelött',
-    # az elgépeléseket jelenleg nem kezeli (nem fuzzy jellegű a keresés; a mintát az elírás miatt "tegnap..."-nak értelmezi)
-    'tegnapellőtt',
-    'holnap',
-    'holnapután',
-    'holnap után',
-    '2022.01.02',
-    '2022-01-03',
-    '20220104', '2022 01 02', '0105', '02 03', '2022. január 10', '2022. II.hó 3.',
+    'most, ma, mai napon, mai napig',   # ragozott alakok is jók
+    'holnap, holnapután, holnap után',  # külön írt változat is jó
+    'tegnap, tegnapelőtt, tegnap előtt, Tegnapelött', # ékezet eltérés nem okoz problémát
+    'tegnapelöött', # az elgépeléseket jelenleg nem kezeli (nem fuzzy jellegű a keresés; a mintát az elírás miatt "tegnap..."-nak értelmezi)            
+    '2022.01.02, 2022-01-03, 20220104, 2022 01 02',
+    '0105, 02 03',
+    '2022. január 10, 2022. II.hó 3.',
     'a 2000. év II. hónapjának 20. napján',
-    # arab, római és szövegesen kiírt számokat / sorszámokat is felismer
-    'MMXXI. II. hónap 12-e',
-    'február 4-én',
-    'másodikán',                          # aktuális hónapban
+    'MMXXI. II. hónap 12-e',    # arab, római és szövegesen kiírt számokat / sorszámokat is felismer
+    '12-én',                    # aktuális hónapban
+    'február 4-én',             # aktuális évben
+    'másodikán',                # aktuális hónapban (ha nincs előtte konkrét év vagy hónap információ)
     'március elsején',
     'február huszonnyolcadikán',
     'február harmincegyedikén',           # nincs ilyen nap, "február"-ként értelmezi
-    # a dátum-kifejezésnek nem kell a szöveg elején állnia ("február végén")
-    'Az ünnepséget február végén tartják meg.'
+    'Az ünnepséget február végén tartják meg.'   # a dátum-kifejezésnek nem kell a szöveg elején állnia ("február végén")
 ], bSzegedAI)
 
 
@@ -113,6 +102,7 @@ fn_printteszt('HÉT NAPJAI, ÜNNEPNAPOK', [
 fn_printteszt('IDŐSZAKOK', [
     '2015-ben',
     'februárban',                     # idén
+    'III',                            # idén
     '2015 január',
     'első félév',                     # idén
     'második negyedév',
@@ -120,8 +110,7 @@ fn_printteszt('IDŐSZAKOK', [
     'tavasszal',
     '2020 nyarán',
     'XIX. században',
-    # 1990-es évek  (50-től az előző század)
-    "'90-es években",
+    "'90-es években",                # 1990-es évek  (50 felet a XX. században, felette a XXI-ben)
     '2010-es években',
     '1900-as években',
     'az ezredfordulón',               # 2000.01.01
@@ -133,25 +122,16 @@ fn_printteszt('IDŐSZAKOK', [
 
 
 fn_printteszt('JELEN MÚLT JÖVŐ', [
-    'idén',
-    'ebben az évben',
-    'jövőre',
-    'jövő évben',
-    'tavaly',
-    'múlt évben',
-    'elmúlt évben',
-    'múlt héten',
-    'jövő héten',
+    'idén, ebben az évben',
+    'jövőre, jövő évben',
+    'tavaly, múlt évben, elmúlt évben',
+    'múlt héten, jövő héten',
     'következő hétvégén',
-    'jövő kedden',
-    'előző pénteken',
-    'e hónapban',
-    'előző hónapban',
-    'következő hónapban',
+    'jövő kedden, előző pénteken',
+    'e hónapban, előző hónapban, következő hónapban',
     'múlt félévben',
     'következő negyedévben',
-    'két év múlva',
-    'három évre rá',
+    'két év múlva, három évre rá',
     '4 hónappal ezelőtt',
     'két nappal ezelőtt',
     '10 hét múlva',
@@ -189,7 +169,10 @@ fn_printteszt('ELEJÉN KÖZEPÉN VÉGÉN, SORSZÁMOZOTT IDŐSZAKOK', [
     'az évtized végén',
     'az előző évtized utolsó negyedében',
     'az évszázad első felében',
-    'az évtized utolsó előtti hetében'
+    'az évtized utolsó előtti hetében',
+    'az évszázad első két évtizede',
+    'jövő hét utolsó három napja',
+    'a hónap utolsó két hete'
 ], bSzegedAI)
 
 
@@ -200,7 +183,7 @@ fn_printteszt('UTÁN ELŐTT', [
     'múlt év második negyedéve előtt',          # kezdődátum: 0001.01.01
     'következő nyár után',                      # záródátum: 9999.12.31
     'hétvége utáni második nap',
-    # időstartam; a pénteki nap nincs már benne
+    # időtartam; a pénteki nap nincs már benne
     'múlt hét péntek előtti 2 hét',
     '2022 utáni 3 év',
     'múlt év előtti év'
@@ -215,6 +198,7 @@ fn_printteszt('DÁTUMTÓL DÁTUMIG', [
     '2022 előtt',                                   # 0001.01.01 a kezdődátum
     '2021 január 2-től 2024 április 3-ig',
     '2021.02.05 - 2021.04.03',
+    '2010 VII-IX',
     '2021.02.05-10',
     # inkluzív (május 31-ig)
     'februártól májusig',
@@ -239,10 +223,8 @@ fn_printteszt('DÁTUMTÓL DÁTUMIG', [
     'a XIX. századtól a XX. századig',
     'a nyolcvanas évektől 2000-ig',
     'az ezredfordulótól 2020-ig',
-
     'hétfőtől 5 napig',
-    # naptári hét   ("péntek után a második [naptári] héten")
-    'péntektől számítva a második héten',
+    'péntek utáni második héten',               # naptári hét
     'péntektől számított két héten belül',
     'péntekig három nap',                       # "három nap péntekig" is jó
     'péntektől kezdődő két hét',
@@ -273,5 +255,25 @@ fn_printteszt('ÖSSZETETT KIFEJEZÉSEK', [
     'tavaly szilveszter előtti szerdán'
 ], bSzegedAI)
 
+fn_printteszt('TÖBB DÁTUMOT TARTALMAZÓ MONDATOK', [
+    'Tavaly május 10-én indultak útnak és két hét múlva érkeztek meg.',
+    'Január 12-én kezdődött, és egy hétre rá érte el a két hónappal korábban mért szintet.',
+    '2020 január és február között, majd a következő év május 5-én'
+], bSzegedAI)
 
 input('\nBezárás: enter')
+
+
+
+
+# # SEBESSÉG TESZT
+# # Eredmény: 1-2 msec / mondat
+# from ezhelper import stopperstart,stopper
+# teszteset='A projekt február 5-e után az első hétköznapon kezdődik és 10 nappal utána fejeződik be.'
+# t=stopperstart()
+# for i in range(1000):
+#     dates=text2date(teszteset,outtype='tuple')
+# stopper(t)
+# print(dates)
+
+# exit()

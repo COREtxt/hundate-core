@@ -74,6 +74,13 @@ def fn_dateadd(dt,nToAdd,unit='day'):
 def fn_daydiff(dt1,dt2):
     return (dt1-dt2) / timedelta(days=1)
 
+def fn_monthdiff(dt1,dt2):
+    # naptári hónapokban számított eltérés   Példa:   2022.02.01 és 2022.01.31  között 1 az eltérés
+    if dt1>dt2:
+        return (dt1.year*12 + dt1.month) - (dt2.year*12 + dt2.month)
+
+
+
 def fn_monthlastday(dt):
     # A megadott nap hónapjának utolsó napja
     return fn_dateadd(fn_dateadd(dt,1,'month'),-1)
@@ -101,7 +108,7 @@ def fn_printteszt(címsor,tesztesetek,bSzegedAI):
     print('\n\n' + címsor + '\n')
     for teszt in tesztesetek:
         try:
-            hundate_out=text2date(teszt)
+            hundate_out=text2date(teszt,outtype='all')
         except:
             hundate_out='(exception)'
 
@@ -145,8 +152,11 @@ def text2date(text,dt0=None,tense='',outtype='first'):
       'all':      '2021.10.12,2021.12.10-2021.12.20'
     '''
     
-    def sub_findpattern(pattern,invalues,outvalues,dt0):
+
+    def sub_findpattern(pattern,invalues,outvalues,dt0,today,bFirstround):
         # ciklus az ablakméretre:  összes szó, összes-1 szó, összes-2 szó, ...
+        # bFirstround:  ne érvényesüljenek még azok a mintázatok, amelyeknek van [dátum] mezős kiterjesztése
+
         patternwords=pattern.split()
         nWords=len(patternwords)
 
@@ -171,142 +181,218 @@ def text2date(text,dt0=None,tense='',outtype='first'):
 
                 method=pattern2method.get(patternL)
                 if method:
-                    # Argumentumok előkészítése
+                    # ha van [dátum]-ot tartalmazó kiterjesztése a mintának, és első körös keresésnél tartunk, akkor nem kell alkalmazni
+                    # példa:  "második hét márciusban"    "[szám] [időtartam] [hónapnév]"
+                    #     - ha nincs ez a késleltetés, akkor elsőként a "[szám] [időtartam]" minta érvényesülne
+                    #       A helyes sorrend:  "[hónapnév]"<<"[dátum]""  "[szám] [időtartam] [dátum]"<<"[dátum]"
+                    bOk=True
+                    if bFirstround and nWindowLen>1:
+                        # ha van előtte annotált szó
+                        if (nWindowStart>0 and patternwords[nWindowStart-1]!='[dátum]'
+                            and 'before' in text2date.patternHasExtension[patternL]): bOk=False
+                        elif (nWindowStart+nWindowLen<nWords and patternwords[nWindowStart+nWindowLen]!='[dátum]'
+                            and 'after' in text2date.patternHasExtension[patternL]): bOk=False
+                        
 
-                    # today beállítása  (a "jövő" "múlt" "most" mindig erre hivatkozik)
-                    if dt0==None: dt0=datetime.now()
-                    methods.today=dt0
-                    
-                    # dt0 beállítása:  today az induló érték, de a beazonosított dátumok dinamikusan módosítják
-                    #   A "következő", "előző", "ugyanabban", továbbá a hiányos dátumkifejezések erre hivatkoznak
-                    # Ha van már előtte [dátum], akkor az lesz a viszonyítási alap
-                    for i in reversed(range(nWindowStart)):
-                        if patternwords[i]=='[dátum]':
-                            dates=outvalues_sync[i]
-                            dt1,dt2=dates
-                            if dt1.year>1: dt0=dt1
-                            elif dt2.year<9999: dt0=dt2
-                            break
-                    if dt0==None: dt0=datetime.now()
-                    methods.dt0=dt0
-                    
-                    methods.tense=tense
-                    methods.patternword_előtte=''
-                    if nWindowStart>0: methods.patternword_előtte=patternwords[nWindowStart-1]
-                    methods.patternword_utána=''
-                    if nWindowStart+nWindowLen<nWords: methods.patternword_utána=patternwords[nWindowStart+nWindowLen]
-                    invaluesL=[]
-                    for value in invalues_sync[nWindowStart:nWindowStart+nWindowLen]:
-                        if value: invaluesL.append(value)    # a None értékek nem kellenek
-                    methods.invalues=invaluesL
-                    outvalues=[]
-                    for value in outvalues_sync[nWindowStart:nWindowStart+nWindowLen]:
-                        if value: outvalues.append(value)   # a None értékek nem kellenek
-                    methods.outvalues=outvalues
+                    if bOk:
+                        # Argumentumok előkészítése
 
-                    dates=method()
-
-                     # Ha sikeres a beazonosítás
-                    if dates and dates[0]:
-                        foundpattern=patternL
-                        date1,date2 = dates
-                        if date2 and date2!=date1: foundpattern=foundpattern + '   ' + date1.strftime('%Y.%m.%d') + '-' + date2.strftime('%Y.%m.%d')
-                        else: foundpattern=foundpattern + '   ' + date1.strftime('%Y.%m.%d')
-                       
-
-                        pattern=' '.join([*patternwords[:nWindowStart],'[dátum]',*patternwords[nWindowStart+nWindowLen:]])
-                        pattern=trim(pattern)
-
-                        # Az invalues-ba ne kerüljön be [dátum] mező, mert túl sok információt takarna el
-                        words=patternL.split()
-                        for i in range(len(words)):
-                           if words[i]=='[dátum]':
-                               patternL=patternL.replace('[dátum]',invaluesL[i])
-                               break
-
-                        invalues_sync=[*invalues_sync[:nWindowStart],patternL,*invalues_sync[nWindowStart+nWindowLen:]]
-                        outvalues_sync=[*outvalues_sync[:nWindowStart],dates,*outvalues_sync[nWindowStart+nWindowLen:]]
-                        invalues=[]
-                        for value in invalues_sync:
-                            if value: invalues.append(value)    # a None értékek nem kellenek
+                        # today beállítása  (a "jövő" "múlt" "most" mindig erre hivatkozik)
+                        methods.today=today
+                        
+                        # dt0 beállítása:  today az induló érték, de a beazonosított dátumok dinamikusan módosítják
+                        #   A "következő", "előző", "ugyanabban", továbbá a hiányos dátumkifejezések erre hivatkoznak
+                        # Ha van már előtte [dátum], akkor az lesz a viszonyítási alap
+                        for i in reversed(range(nWindowStart)):
+                            if patternwords[i]=='[dátum]':
+                                dates=outvalues_sync[i]
+                                dt1,dt2=dates
+                                if dt1.year>1: dt0=dt1
+                                elif dt2.year<9999: dt0=dt2
+                                break
+                        methods.dt0=dt0
+                        
+                        methods.tense=tense
+                        methods.patternword_előtte=''
+                        if nWindowStart>0: methods.patternword_előtte=patternwords[nWindowStart-1]
+                        methods.patternword_utána=''
+                        if nWindowStart+nWindowLen<nWords: methods.patternword_utána=patternwords[nWindowStart+nWindowLen]
+                        invaluesL=[]
+                        for value in invalues_sync[nWindowStart:nWindowStart+nWindowLen]:
+                            if value: invaluesL.append(value)    # a None értékek nem kellenek
+                        methods.invalues=invaluesL
                         outvalues=[]
-                        for value in outvalues_sync:
+                        for value in outvalues_sync[nWindowStart:nWindowStart+nWindowLen]:
                             if value: outvalues.append(value)   # a None értékek nem kellenek
-                        return (pattern,invalues,outvalues,foundpattern)
+                        methods.outvalues=outvalues
+
+                        dates=method()
+
+                        # Ha sikeres a beazonosítás
+                        if dates and dates[0]:
+                            foundpattern=patternL
+                            date1,date2 = dates
+                            if date2 and date2!=date1: foundpattern=foundpattern + '   ' + date1.strftime('%Y.%m.%d') + '-' + date2.strftime('%Y.%m.%d')
+                            else: foundpattern=foundpattern + '   ' + date1.strftime('%Y.%m.%d')
+                        
+
+                            pattern=' '.join([*patternwords[:nWindowStart],'[dátum]',*patternwords[nWindowStart+nWindowLen:]])
+                            pattern=trim(pattern)
+
+                            # Az invalues-ba ne kerüljön be [dátum] mező, mert túl sok információt takarna el
+                            words=patternL.split()
+                            for i in range(len(words)):
+                                if words[i]=='[dátum]':
+                                    patternL=patternL.replace('[dátum]',invaluesL[i])
+                                    break
+
+                            invalues_sync=[*invalues_sync[:nWindowStart],patternL,*invalues_sync[nWindowStart+nWindowLen:]]
+                            outvalues_sync=[*outvalues_sync[:nWindowStart],dates,*outvalues_sync[nWindowStart+nWindowLen:]]
+                            invalues=[]
+                            for value in invalues_sync:
+                                if value: invalues.append(value)    # a None értékek nem kellenek
+                            outvalues=[]
+                            for value in outvalues_sync:
+                                if value: outvalues.append(value)   # a None értékek nem kellenek
+                            return (pattern,invalues,outvalues,dt0,foundpattern)
         return None
 
 
-    # Annnotálás
+    # pattern2method előfeldogozása: van-e a pattern-hez olyan másik pattern, ami az eredetinek a
+    #      [dátum] mezőt tartalmazó kiterjesztése (balra illetve jobbra)
+    # patternHasExtension:  pattern1:'before', pattern2:'after', pattern3:None, pattern4:'beforeafter',...
+    #   A patternHasExtension vizsgálat célja:  a [dátum] kiterjesztéssel rendelkező mintázatok érvényesítésére csak akkor kerüljön sor,
+    #     ha a körülötte lévő, dátumként értelmezhető kifejezések már be lettek azonosítva
+    #   Nem mindenható a megoldás, mert ha két konkurrens mintázatnak is van [dátum] mezős kiterjesztése, akkor nem tudja 
+    #     egyértelműen beállítani a helyes sorrendet. Ilyen esetekben egyedi ([dátum]-mezőt nem tartalmazó) mintázatot is fel kell venni
+
+    if not hasattr(text2date, "patternHasExtension"):
+        text2date.patternHasExtension={}
+        patterns = pattern2method.keys()
+        for pattern in patterns:
+            hasextension=''
+            for patternL in patterns:
+                if len(patternL)>len(pattern):
+                    nPosPattern=patternL.find(pattern)
+                    if nPosPattern>-1:
+                        if patternL[:nPosPattern].find('[dátum]')>-1: hasextension+='before'
+                        if patternL[nPosPattern+len(pattern):].find('[dátum]')>-1: hasextension+='after'
+            text2date.patternHasExtension[pattern]=hasextension
+
+
+
+
+
+    # Annotálás
     annotated_input,invalues,outvalues = d_annotate(text,lookup_text2dateG,max_words_in_samples=2)
     annotated_input0=annotated_input
     # - a max_words_in_samples a ténylegesen alkalmazott keresőmintákhoz igazítandó (lookup_text2dateG)
 
     if outtype=='annotate only': return annotated_input         # debug
     
-    foundpatterns=[]
+    # Annotált szó-fűzérek kiemelése  (a mintákban csak annotált szavak szerepelnek, a nem annotált szavak tagolójelként működnek)
+    class TExpression:
+        def __init__(self,annotwords,invalues,outvalues):
+            self.annotwords=' '.join(annotwords)
+            self.invalues=invalues
+            self.outvalues=outvalues
+            self.foundpatterns=[]
 
-    while True:
-        # adja hozzá a vizsgálandó inputhoz a következő [múltjövő] szakaszt
-        # words=annotated_input.split()
-        # for i in range(len(words)):
-        #     if word[i]=='[múltjövő]':
-        #         section=words[:i]
-        #         section_invalues=invalues[:i]
-        #         outvalues=outvalues[:i]
-        #         annotated_input=annotated_input[i:]
+    expressions=[]
+    annotwords=[]
+    invaluesL=[]
+    outvaluesL=[]
+    annotindex=0
+    words=annotated_input.split()
+    words.append('zárás')       # technikai:  a ciklusban az utolsó expression mentéséhez
+    for word in words:
+        # A nem annotált szavak szakaszhatárnak minősülnek
+        if word[0]!='[':
+            if annotwords:
+                expression=TExpression(annotwords,invaluesL,outvaluesL)
+                expressions.append(expression)
+                annotwords=[]
+                invaluesL=[]
+                outvaluesL=[]
+        else:
+            annotwords.append(word)
+            invaluesL.append(invalues[annotindex])
+            outvaluesL.append(outvalues[annotindex])
+            annotindex+=1
+    
+
+    # Mintázatok beazonosítása az annotált inputban, szakaszonként  (rekurzív)
+    if dt0==None: dt0=datetime.now()
+    today=dt0           # fix marad, a dt0 viszont változhat (balról jobbra haladva módosítáják a beazonosított dátumkifejezések)
+
+    dátumok_out=[]
+    annotwords_out=[]
+    invalues_out=[]
+    outvalues_out=[]
+    foundpatterns_out=[]
+    for expression in expressions:
+        bFirstround=True
+        while True:
+            # mintakeresés pásztázi ciklussal. Találat esetén [dátum] annotációt ír a beazonosított részkifejezés helyébe
+            result=sub_findpattern(expression.annotwords,expression.invalues,expression.outvalues,dt0,today,bFirstround)
+            
+            # Ha történt beazonosítás, akkor a pásztázási ciklus újrakezdése
+            if result: 
+                expression.annotwords,expression.invalues,expression.outvalues,dt0,foundpattern = result
+                expression.foundpatterns.append(foundpattern)
+                bFirstround=True
+            # Ha nem volt találat
+            else:
+                # Próbálkozzon még egyszer, hogy a befoglalt mintázatok is érvényesüljenek (a megváltozott kontextussal)
+                if bFirstround: bFirstround=False
+                else:  break        # ciklus vége
+
+        # dátumkifejezések kigyűjtése (egy szakaszon belül is előfordulhat több dátum)  és az aktuális dátum beállítása
+        patternwords=expression.annotwords.split()
+        nValueIndex=-1
+        for patternword in patternwords:
+            if patternword[0]=='[': nValueIndex+=1
+            if patternword=='[dátum]': 
+                dátumok_out.append(expression.outvalues[nValueIndex])      # (date1,date2)
+                date1,date2=expression.outvalues[nValueIndex]
+                if date2: dt0=date2
+                else: dt0=date1
+
+        annotwords_out.append(expression.annotwords)
+        invalues_out.extend(expression.invalues)
+        outvalues_out.extend(expression.outvalues)
+        foundpatterns_out.extend(expression.foundpatterns)
+
+    
+    
+    if vanbenne(outtype,'tuple'): 
+        if len(dátumok_out)==0: return None
+        if vanbenne(outtype,'first'): return dátumok_out[0]
+        else: return dátumok_out
+
+    if beginwith(outtype,'first'): dátumok_out=dátumok_out[:1]
+    dátumok=[]
+    for dátum in dátumok_out:
+        date1,date2 = dátum
+        if date2: strDátum=date1.strftime('%Y.%m.%d') + '-' + date2.strftime('%Y.%m.%d')
+        else: strDátum=date1.strftime('%Y.%m.%d')
+        dátumok.append(strDátum)
+   
+    result = ','.join(dátumok)
+    if endwith(outtype,r'\+'):
+        if not result: result = 'sikertelen'
+        result=(result + '\n\n' +
+            '   annotated input:     ' + annotated_input0 + '\n' +
+            '   annotated output:    ' + ' '.join(annotwords_out) + '\n' +
+            '   invalues:            ' + ' '.join(invalues) + '\n' +
+            'foundpatterns:\n   ' + '\n   '.join(foundpatterns_out)
+        )
+
+    return result
 
 
-        result=sub_findpattern(annotated_input,invalues,outvalues,dt0)
-        
-
-        if result: 
-            annotated_input,invalues,outvalues,foundpattern = result
-            foundpatterns.append(foundpattern)
 
 
-
-        # Ha nincs további beazonosítás, vagy a teljes szöveg be lett azonosítva, akkor vége
-        if result==None or annotated_input=='[dátum]':
-            # Megnézendő, hogy volt-e sikeres dátumbeazonosítás (az első lesz a return)
-            dátumok=[]
-            nValueIndex=-1
-            patternwords=annotated_input.split()
-            for patternword in patternwords:
-                if patternword[0]=='[': nValueIndex+=1
-                if patternword=='[dátum]':
-                    date1,date2 = outvalues[nValueIndex]
-                    if outtype=='first_tuple':
-                        return (date1,date2)
-                    else:
-                        if date2 and date2!=date1: result=date1.strftime('%Y.%m.%d') + '-' + date2.strftime('%Y.%m.%d')
-                        else: result=date1.strftime('%Y.%m.%d')
-                        if outtype=='first+': result=(result + '\n' +
-                            '   input:     ' + annotated_input0 + '\n' +
-                            '   output:    ' + annotated_input + '\n' +
-                            '   outvalues: ' + str(outvalues) + '\n' +
-                            '   invalues:  ' + str(invalues) + '\n' +
-                            'foundpatterns:\n   ' + '\n   '.join(foundpatterns)
-                            )
-                        if outtype in ['first','first+']:
-                            return result
-                    dátumok.append(result)
-            if len(dátumok)>0:
-                return ','.join(dátumok)
-
-            # sikertelen  (egyetlen dátum sem volt a szövegben)
-            if outtype=='first':  result=''
-            elif outtype=='first+':  
-                result=('sikertelen\n' +
-                        '   input:     ' + annotated_input0 + '\n' +
-                        '   output:    ' + annotated_input + '\n' +
-                        '   outvalues: ' + str(outvalues) + '\n' +
-                        '   invalues:  ' + str(invalues) + '\n' +
-                        'foundpatterns:\n   ' + '\n   '.join(foundpatterns)
-                        )
-            elif outtype=='first_tuple': result=(None,None)
-            return result
-
-        # Ha részleges beazonosítás volt, akkor a pásztázási ciklus újrakezdése
 
 
 
@@ -316,6 +402,9 @@ class Ttext2date:
     def __init__(self):
         self.datemin=datetime(1,1,1)
         self.datemax=datetime(9999,12,31)
+
+
+
 
     @staticmethod
     def sub_is_sorszam(szám_in):
@@ -794,46 +883,76 @@ class Ttext2date:
         return (dtout,dtout2)
 
     @staticmethod
-    def sub_dátum_sorszám_időtartam(dátum,szám,időtartam):
+    def sub_dátum_sorszám_időtartam(dátum,sorszám,időtartam,szám=1):
+        # naptári év, naptári hónap, naptári hét, ...
         dtout=None
         dtout2=None
         dt1,dt2=dátum
-        if időtartam=='évtized' and (dt1.year % 10)==0 and dt1.month==1 and dt1.day==1:            
-            if szám=='utolsó': szám=(dt2.year-dt1.year)//10 + 1
-            elif szám=='utolsóelőtti': szám=(dt2.year-dt1.year)//10
-            dtout=datetime(dt1.year + 10*(szám-1),1,1)
-            dtout2=datetime(dt1.year + 10*(szám-1) + 9,12,31)
-        elif időtartam=='év' and dt1.month==1 and dt1.day==1:            
-            if szám=='utolsó': szám=(dt2.year-dt1.year)+1
-            elif szám=='utolsóelőtti': szám=(dt2.year-dt1.year)
-            dtout=datetime(dt1.year + (szám-1),1,1)
-            dtout2=datetime(dt1.year + (szám-1),12,31)
-        elif időtartam=='félév' and dt1.month==1 and dt1.day==1:            
-            if szám=='utolsó': dtout=datetime(dt2.year,((dt2.month-1)//2)*2 + 1,1)
-            elif szám=='utolsóelőtti': dtout=fn_dateadd(datetime(dt2.year,((dt2.month-1)//2)*2 + 1,1),-6,'month')
-            else: dtout=datetime(dt1.year,1+(szám-1)*6,1)
-            dtout2=fn_monthlastday(fn_dateadd(dtout,5,'month'))
+        bUtolsó=False
+        if sorszám in ['utolsó','utolsóelőtti']: 
+            if sorszám=='utolsó': sorszám=1
+            elif sorszám=='utolsóelőtti': sorszám=2
+            bUtolsó=True
+        if időtartam=='évtized':            
+            if bUtolsó:
+                dt0=datetime((dt2.year//10)*10 + 1,1,1)     # utána következő naptári évtized kezdőnapja
+                dtout=datetime(dt0.year - 10*szám*sorszám,1,1)
+            else:
+                dt0=datetime((dt1.year//10)*10,1,1)  # az előtte kezdődő naptári évtized kezdőnapja
+                dtout=datetime(dt1.year + 10*szám*(sorszám-1),1,1)
+            dtout2=fn_dateadd(fn_dateadd(dtout,10*szám,'year'),-1,'day')
+        elif időtartam=='év':            
+            if bUtolsó:
+                dt0=datetime(dt2.year + 1,1,1)     # utána következő naptári év kezdőnapja
+                dtout=datetime(dt0.year - szám*sorszám,1,1)
+            else:
+                dt0=datetime(dt1.year,1,1)  # az előtte kezdődő naptári év kezdőnapja
+                dtout=datetime(dt1.year + szám*(sorszám-1),1,1)
+            dtout2=fn_dateadd(fn_dateadd(dtout,szám,'year'),-1,'day')
+        elif időtartam=='félév':            
+            if bUtolsó:
+                dt0=datetime(dt2.year,((dt2.month-1)//6)*6 + 1,1)     # aktuális naptári félév kezdőnapja
+                dt0=fn_dateadd(dt0,6,'month')     # utána következő naptári félév kezdőnapja
+                dtout=fn_dateadd(dt0,-6*szám*sorszám,'month')
+            else:
+                dt0=datetime(dt1.year,((dt1.month-1)//6)*6 + 1,1)     # aktuális naptári félév kezdőnapja
+                dtout=fn_dateadd(dt0,6*szám*(sorszám-1),'month')
+            dtout2=fn_dateadd(fn_dateadd(dtout,6*szám,'month'),-1,'day')
         elif időtartam=='negyedév' and dt1.month==1 and dt1.day==1:         
-            if szám=='utolsó': dtout=datetime(dt2.year,((dt2.month-1)//3)*3 + 1,1)
-            elif szám=='utolsóelőtti': dtout=fn_dateadd(datetime(dt2.year,((dt2.month-1)//3)*3 + 1,1),-3,'month')
-            else: dtout=datetime(dt1.year,1+(szám-1)*3,1)
-            dtout2=fn_monthlastday(fn_dateadd(dtout,2,'month'))
+            if bUtolsó:
+                dt0=datetime(dt2.year,((dt2.month-1)//3)*3 + 1,1)     # aktuális naptári negyedév kezdőnapja
+                dt0=fn_dateadd(dt0,3,'month')     # utána következő naptári negyedév kezdőnapja
+                dtout=fn_dateadd(dt0,-3*szám*sorszám,'month')
+            else:
+                dt0=datetime(dt1.year,((dt1.month-1)//3)*3 + 1,1)     # aktuális naptári félév kezdőnapja
+                dtout=fn_dateadd(dt0,3*szám*(sorszám-1),'month')
+            dtout2=fn_dateadd(fn_dateadd(dtout,3*szám,'month'),-1,'day')
         elif időtartam=='hónap' and dt1.day==1:            
-            if szám=='utolsó': dtout=datetime(dt2.year,dt2.month,1)
-            elif szám=='utolsóelőtti': dtout=fn_dateadd(datetime(dt2.year,dt2.month,1),-1,'month')
-            else: dtout=datetime(dt1.year,dt1.month + (szám-1),1)
-            dtout2=fn_monthlastday(dtout)
+            if bUtolsó:
+                dt0=datetime(dt2.year,dt2.month,1)     # aktuális naptári hónap kezdőnapja
+                dt0=fn_dateadd(dt0,1,'month')     # utána következő naptári hónap kezdőnapja
+                dtout=fn_dateadd(dt0,-szám*sorszám,'month')
+            else:
+                dt0=datetime(dt1.year,dt1.month,1)     # aktuális naptári félév kezdőnapja
+                dtout=fn_dateadd(dt0,szám*(sorszám-1),'month')
+            dtout2=fn_dateadd(fn_dateadd(dtout,szám,'month'),-1,'day')
         elif időtartam=='hét':              
-            dtMonday=fn_monday(dt1)   # az időszak első hetének hétfői napja (általában korábra esik az időszak első napjánál)
-            if szám=='utolsó': szám=fn_daydiff(dt2,dtMonday)//7 + 1
-            elif szám=='utolsóelőtti': szám=fn_daydiff(dt2,dtMonday)//7
-            dtout=fn_dateadd(dtMonday,(szám-1)*7,'day')
-            dtout2=fn_dateadd(dtout,6,'day')
+            if bUtolsó:
+                dt0=fn_monday(dt2)     # aktuális naptári hét kezdőnapja
+                dt0=fn_dateadd(dt0,7,'day')     # utána következő naptári hét kezdőnapja
+                dtout=fn_dateadd(dt0,-7*szám*sorszám,'day')
+            else:
+                dt0=fn_monday(dt1)     # aktuális naptári hét kezdőnapja
+                dtout=fn_dateadd(dt0,7*szám*(sorszám-1),'day')
+            dtout2=fn_dateadd(fn_dateadd(dtout,7*szám,'day'),-1,'day')
         elif időtartam=='nap':              
-            if szám=='utolsó': szám=fn_daydiff(dt2,dt1) + 1
-            elif szám=='utolsóelőtti': szám=fn_daydiff(dt2,dt1)
-            dtout=fn_dateadd(dt1,szám-1,'day')
-            dtout2=dtout
+            if bUtolsó:
+                dt0=fn_dateadd(dt2,1,'day')     # utána következő nap
+                dtout=fn_dateadd(dt0,-szám*sorszám,'day')
+            else:
+                dt0=dt1     # aktuális naptári nap
+                dtout=fn_dateadd(dt0,szám*(sorszám-1),'day')
+            dtout2=fn_dateadd(dtout,szám-1,'day')
 
         if dtout==None or dtout>dt2: return None     # a kezdődátum nem lehet későbbi az időszaknál
 
@@ -841,6 +960,31 @@ class Ttext2date:
         if dtout2>dt2: dtout2=dt2
         if dtout2<dtout: return None
         return (dtout,dtout2)
+
+
+
+    @staticmethod
+    def sub_dátum_szám_időtartam(dátum,dátum_in,szám,szám_in,időtartam,időtartam_in):
+        dtout=None
+        dtout2=None
+        # A dátum végén nem lehet [tólig]
+        if endwith(dátum_in,r'\[tólig\]'): return None
+
+        # A dátumnak időszakot kell tartalmaznia
+        dt1,dt2 = dátum
+        if dt1==None or dt2==None or dt2<=dt1: return None
+
+        if szám in ['utolsó','utolsóelőtti'] or Ttext2date.sub_is_sorszam(szám_in):
+            return Ttext2date.sub_dátum_sorszám_időtartam(dátum,szám,időtartam)
+
+        # "XIX. század 20-as éveiben"
+        elif beginwith(időtartam_in,'évei|évek'):       
+            if dt1.year%100==0 and dt1.month==1 and dt1.day==1 and szám%10==0:
+                dtout=datetime(dt1.year + szám,1,1)
+                dtout2=datetime(dt1.year + szám + 9,12,31)
+        
+        return (dtout,dtout2)
+
 
     @staticmethod
     def sub_dátum_sorszám_törtrész(dátum,szám,törtrész):
@@ -956,7 +1100,16 @@ class Ttext2date:
 
     def szám_szám_szám(self):
         n1,n2,n3=self.outvalues
-        if (n1<1000 or n1>2100): return None 
+        if (n1<1000 or n1>2100): return None
+        # A második szám nem lehet ragozott
+        szám2=self.invalues[1].rstrip('.')
+        if szám2[0].isdigit() and not szám2.isdigit(): return None    # pl. "4-én"
+
+        # A harmadik szám nem lehet római szám
+        if romaiszam2int(self.invalues[2].rstrip('.'))>0: return None
+
+        # "2020 első két hete/napja/hónapja/..." ne kerüljön ide
+        # if Ttext2date.sub_is_sorszam(self.invalues[1]) and not Ttext2date.sub_is_sorszam(self.invalues[2]) and self.patternword_utána=='[időtartam]': return None 
         return self.sub_wholedate(n1,n2,n3)
 
     def szám_szám_időtartam_szám(self):
@@ -981,9 +1134,9 @@ class Ttext2date:
     def hónapnév_szám(self):
         honap,n2=self.outvalues
         szám_in = self.invalues[1]
-        # nem itt kell kezelni, ha a [sorszám] [időtartam] mintázat is jó lehet  (pl. "november 2. fele", "november 2. hétfője")
-        if Ttext2date.sub_is_sorszam(szám_in) and self.patternword_utána in ['[időtartam]','[hétnapja]','[törtrész]']: return None
-        #if not (endwith(szám_in,'dik') or szám_in=='elsö'):     # "január első fele" ne "január 1." legyen
+        # nem itt kell kezelni, ha a [sorszám] [időtartam] mintázat is jó lehet  (pl. "november 2. fele", "november 2. hétfője", "november első 2 napja")
+        if (endwith(szám_in,r'dik|elsö|első')           # ha betűvel írt sorszám akkor biztos nem ide való
+            or (endwith(szám_in,r'\.') and self.patternword_utána in ['[időtartam]','[hétnapja]','[törtrész]'])): return None
         return self.sub_wholedate(self.dt0.year,int(honap),n2)
 
     def szám_szám(self):
@@ -996,8 +1149,19 @@ class Ttext2date:
             if len(szám_in)==2 and szám_in.isdigit():    # fontos, hogy a "2021 2. ne kerüljön ide (pl. nem működne a "2021. második fele" beazonosítása)
                 dtout=datetime(n1,n2,1)
                 dtout2=fn_monthlastday(dtout)
-        # "01 12"    hónap nap
-        elif (n1>=1 and n1<=12) and (n2>=1 and n2<=31) and self.patternword_előtte not in ['[időtartam]','[hónapnév]']:
+
+        # "01 12","I 12", "VIII. másodikán"    hónap nap    
+        elif ((n1>=1 and n1<=12) and (n2>=1 and n2<=31) 
+               and self.patternword_előtte not in ['[időtartam]','[hónapnév]']):
+            # Az első számjegy számjegyes szám vagy római szám (szöveges szám nem megengedett), 
+            #   nem lehet ragozott, számjegyes szám csak "0" előtaggal (pl. "02 10")
+            szám1 = self.invalues[0].rstrip('.')
+            szám2 = self.invalues[1].rstrip('.')
+            if romaiszam2int(szám2)>0: return None    # a második szám nem lehet római szám
+            bOk = romaiszam2int(szám1)>0
+            if not bOk:
+                bOk = (szám1.isdigit() and n1<10 and len(szám1)==2)
+            if not bOk: return None
             try: dtout=datetime(self.dt0.year,n1,n2)
             except: dtout=None
         # "2012-2014"
@@ -1026,9 +1190,13 @@ class Ttext2date:
         if n>=1000 and n<=2100:
             dtout=datetime(n,1,1)
             dtout2=datetime(n,12,31)
-        # másodikán, másodikától, ...  (de "első" "második" ne kerüljön ide)
-        #  todo: 2-án, 2-ától, ... is kellene
-        elif n>=1 and n<=31 and vanbenne(szám_in,'dika|dike|diká|diké|elsej'):
+        # római szám (hónap)
+        elif n>=1 and n<=12 and romaiszam2int(szám_in.rstrip('.'))>0:
+            dtout=datetime(self.dt0.year,n,1)
+            dtout2=fn_monthlastday(dtout)
+        # másodikán, másodikától, 2-án, ...  (de "első" "második" ne kerüljön ide)
+        elif (n>=1 and n<=31 and (vanbenne(szám_in,'dika|dike|diká|diké|elsej')
+              or (szám_in[0].isdigit() and not szám_in.isdigit()))):   # ragozott szám, pl "4én" 
             try: dtout=datetime(self.dt0.year,self.dt0.month,n)
             except: dtout=None
         # '20220102'  '19551211'
@@ -1047,7 +1215,7 @@ class Ttext2date:
 
     def maholnap(self):
         n,=self.outvalues
-        return (fn_dateadd(self.dt0,int(n)),None)       
+        return (fn_dateadd(self.today,int(n)),None)       
 
 
 
@@ -1055,15 +1223,15 @@ class Ttext2date:
         maholnap,időtartam=self.outvalues
         n=int(maholnap)
         if időtartam!='nap': return None
-        return (fn_dateadd(self.dt0,n),None)      
+        return (fn_dateadd(self.today,n),None)      
 
 
     def maholnap_utánelőtt(self):
         dtout=None
         maholnap,utánelőtt=self.outvalues
         n=int(maholnap)
-        if n==1 and utánelőtt=='után': dtout=fn_dateadd(self.dt0,2)       
-        elif n==-1 and utánelőtt=='előtt': dtout=fn_dateadd(self.dt0,-2)       
+        if n==1 and utánelőtt=='után': dtout=fn_dateadd(self.today,2)       
+        elif n==-1 and utánelőtt=='előtt': dtout=fn_dateadd(self.today,-2)       
         return (dtout,None)
 
     def hónapnév(self):
@@ -1099,14 +1267,20 @@ class Ttext2date:
 
 
 
-    def szám_hétnapja(self):           # "második hétfő" (idén)  "120. munkanap" (idén) 
+    def szám_hétnapja(self):           # "második hétfő" (mai naptól)  "120. munkanap" (idén, 10 feletti sorszám esetén)
         szám,hétnapja=self.outvalues       
         # sorszám
         if not Ttext2date.sub_is_sorszam(self.invalues[0]): return None
         # ne legyen előtte dátumként vagy relációként értelmezhető egyszavas kifejezés  (pl. "2020 második hétfő") 
         if self.patternword_előtte in ['[szám]','[hónapnév]','[időtartam]','[utánielőtti]','[tólig]']: return None
 
-        return Ttext2date.sub_sorszám_hétnapja(datetime(self.dt0.year,1,1),datetime(self.dt0.year,12,31),szám,hétnapja)
+        if szám<10: 
+            dt1=fn_dateadd(self.dt0,1)
+            dt2=fn_dateadd(dt1,70)
+        else:
+            dt1=datetime(self.dt0.year,1,1)
+            dt2=datetime(self.dt0.year,12,31)
+        return Ttext2date.sub_sorszám_hétnapja(dt1,dt2,szám,hétnapja)
 
 
     def utolsó_hétnapja(self):          # "utolsó hétfő" (aktuális nap előtti utolsó)
@@ -1216,7 +1390,9 @@ class Ttext2date:
         #  "két hete",  "három hónapja",  "12 éve"   "20 napja"  (kétértelmű, de időpontot is jelenthet, "... ezelőtt" jelentéssel) 
         if időtartam_in in ['éve','honapja','hete','napja']: 
             # ha szám sorszám, és előtte valamilyen időtartam-szó áll, akkor nem itt kell értelmezni (pl. "2020 3. hete")
-            if Ttext2date.sub_is_sorszam(szám_in) and self.patternword_előtte in ['[időtartam]','[szám]','[évszak]','[hónapnév]','[évnapja]','[hétnapja]']: return None
+            if (self.patternword_előtte in ['[szám]','[utolsó]']           # "2020 harmadik hete"  "a hónap első két hete"
+                or (Ttext2date.sub_is_sorszam(szám_in) 
+                   and self.patternword_előtte in ['[időtartam]','[szám]','[évszak]','[hónapnév]','[évnapja]','[hétnapja]'])): return None
             
             szám=-szám
             if időtartam=='nap':
@@ -1256,8 +1432,12 @@ class Ttext2date:
         # [sorszám] [időtartam]
         #   Csak akkor jöjjön ide, ha előtte nem egyszavas dátumkifejezés áll
         #     (ebben az esetben először az egyszavas dátum lefordítása kell, majd utána a "[dátum] [szám] [időtartam]" mintázat
-        elif Ttext2date.sub_is_sorszam(szám_in) and not self.patternword_előtte in ['[szám]','[évszak]','[időtartam]',
-                                                '[évnapja]','[hónapnév]','[utánelőtt]','[utánielőtti]','[tólig]']:
+        elif (Ttext2date.sub_is_sorszam(szám_in) 
+            # and not self.patternword_előtte in 
+            #     ['[szám]','[évszak]','[időtartam]','[évnapja]','[hónapnév]','[utánelőtt]','[utánielőtti]','[tólig]']
+            # and not self.patternword_utána in
+            #     ['[szám]','[évszak]','[időtartam]','[évnapja]','[hónapnév]','[utánelőtt]','[utánielőtti]','[tólig]','[múltjövő]']
+            ):
             if időtartam=='évtized':       # aktuális évszázadban
                 if szám>=1 or szám<=10:
                     year=(self.dt0.year//100) * 100
@@ -1397,6 +1577,8 @@ class Ttext2date:
         if időtartam!='év': return None
         dt0=Ttext2date.sub_múltjövő_dt0(self,múltjövő)
         if not dt0: return None
+        if múltjövő=='következő': múltjövő='jövő'
+        elif múltjövő=='előző': múltjövő='múlt'
         szám_in=self.invalues[3]
         return Ttext2date.sub_múltjövő_hónapnév_szám(múltjövő,honap,szám,szám_in,dt0)
 
@@ -1492,7 +1674,7 @@ class Ttext2date:
     def dátum_tólig_szám_időtartam(self):       # "hétfőtől 5 nap", "december 1-ig két hét"
         dátum,tólig,szám,időtartam = self.outvalues
         szám_in=self.invalues[2]
-        # if Ttext2date.sub_is_sorszam(szám_in): return None        # a sorszámozott naptári időszakok itt nem értelmezhetők
+        if Ttext2date.sub_is_sorszam(szám_in): return None        # a sorszámozott naptári időszakok itt nem értelmezhetők
         # ellenpélda: "hétfőtől számítva a második héten"  helyesen: "hétfő utáni második héten", "hétfő után a második héten"
         # - ha a sorszámos változatot is átengedi a függvény, akkor a "2020 második negyedévtől a harmadik negyedévig" teljesen fals eredményt ad
         return Ttext2date.sub_utánielőtti_időszak(dátum,tólig,szám,szám_in,időtartam)
@@ -1661,7 +1843,7 @@ class Ttext2date:
         szám_in = self.invalues[1]
         if not Ttext2date.sub_is_sorszam(szám_in): return None
         if self.patternword_előtte in ['[szám]','[múltjövő]']: return None   # nem állhat előtte szám, pl. "XIX. század első felében" példamondat "század első felében"-ként értelmeződne
-        dátum=Ttext2date.sub_múltjövő_időtartam(időtartam,'most',self.today)
+        dátum=Ttext2date.sub_múltjövő_időtartam(időtartam,'most',self.dt0)
         return Ttext2date.sub_dátum_sorszám_törtrész(dátum,szám,törtrész)
 
     def időtartam_elejevége(self):                  # "hét közepén", "a hónap elejétől", "év végén"
@@ -1675,22 +1857,7 @@ class Ttext2date:
 
     def dátum_szám_időtartam(self):                 # "jövő év második félévében", "XIX. század harmadik évtizedében", "február első hetében"
         dátum,szám,időtartam = self.outvalues
-
-        # A dátum végén nem lehet [tólig]
-        if endwith(self.invalues[0],r'\[tólig\]'): return None
-
-        # A dátumnak időszakot kell tartalmaznia
-        dt1,dt2 = dátum
-        if dt1==None or dt2==None or dt2<=dt1: return None
-
-        if Ttext2date.sub_is_sorszam(self.invalues[1]):
-            return Ttext2date.sub_dátum_sorszám_időtartam(dátum,szám,időtartam)
-
-        # "XIX. század 20-as éveiben"
-        elif beginwith(self.invalues[2],'évei|évek'):       
-            if dt1.year%100==0 and dt1.month==1 and dt1.day==1 and szám%10==0:
-                dtout=datetime(dt1.year + szám,1,1)
-                dtout2=datetime(dt1.year + szám + 9,12,31)
+        return Ttext2date.sub_dátum_szám_időtartam(dátum,self.invalues[0],szám,self.invalues[1],időtartam,self.invalues[2])
 
     def dátum_szám_időtartam_tólig_szám_időtartam_tólig(self):  # a hét első napjától a harmadik napjáig
         dátum,szám,időtartam,tólig,szám2,időtartam2,tólig2 = self.outvalues
@@ -1706,11 +1873,34 @@ class Ttext2date:
         if not Ttext2date.sub_is_sorszam(self.invalues[4]): return None
         return Ttext2date.sub_dátum_sorszám_időtartamtól_sorszám_időtartamig(dátum,szám,időtartam,szám2,időtartam)
 
-    def dátum_szám_szám_időtartam(self):   # a hét első és ötödik napja között
+    def dátum_szám_szám_időtartam(self):   # a hét első és ötödik napja között      "a hét első két napja"
         dátum,szám,szám2,időtartam = self.outvalues
-        if not Ttext2date.sub_is_sorszam(self.invalues[1]): return None
-        if not Ttext2date.sub_is_sorszam(self.invalues[2]): return None
-        return Ttext2date.sub_dátum_sorszám_időtartamtól_sorszám_időtartamig(dátum,szám,időtartam,szám2,időtartam)
+        if szám not in ['utolsó','utolsóelőtti'] and not Ttext2date.sub_is_sorszam(self.invalues[1]): return None
+        if not Ttext2date.sub_is_sorszam(self.invalues[2]):         # 'a hét első két napja'
+            return Ttext2date.sub_dátum_sorszám_időtartam(dátum,szám,időtartam,szám2)
+        else:
+            return Ttext2date.sub_dátum_sorszám_időtartamtól_sorszám_időtartamig(dátum,szám,időtartam,szám2,időtartam)
+
+    def szám_szám_szám_időtartam(self):      # "2020 első két hete"  (kiemelés, mert félreérthető)
+        évszám,szám,szám2,időtartam = self.outvalues
+        if évszám<1000 or évszám>2100: return None
+        dátum=(datetime(évszám,1,1),datetime(évszám,12,31))
+        if szám not in ['utolsó','utolsóelőtti'] and not Ttext2date.sub_is_sorszam(self.invalues[1]): return None
+        if not Ttext2date.sub_is_sorszam(self.invalues[2]):         # 'a hét első két napja'
+            return Ttext2date.sub_dátum_sorszám_időtartam(dátum,szám,időtartam,szám2)
+        else:
+            return Ttext2date.sub_dátum_sorszám_időtartamtól_sorszám_időtartamig(dátum,szám,időtartam,szám2,időtartam)
+
+
+    def szám_szám_időtartam_dátum(self):      # "első négy nap a héten"
+        szám,szám2,időtartam,dátum = self.outvalues
+        if szám not in ['utolsó','utolsóelőtti'] and not Ttext2date.sub_is_sorszam(self.invalues[1]): return None
+        if Ttext2date.sub_is_sorszam(self.invalues[2]): return None
+        return Ttext2date.sub_dátum_sorszám_időtartam(dátum,szám,időtartam,szám2)
+
+    def szám_időtartam_dátum(self):        # "második hét decemberben"
+        szám,időtartam,dátum = self.outvalues
+        return Ttext2date.sub_dátum_szám_időtartam(dátum,self.invalues[2],szám,self.invalues[0],időtartam,self.invalues[1])
 
 
 
@@ -1749,6 +1939,16 @@ class Ttext2date:
         dt1,dt2 = dátum
         return Ttext2date.sub_sorszám_hétnapja(dt1,dt2,szám,hétnapja)
 
+    def szám_hétnapja_dátum(self):               # "második hétfő márciusban"
+        szám,hétnapja,dátum = self.outvalues
+        if not Ttext2date.sub_is_sorszam(self.invalues[0]): return None
+        dt1,dt2 = dátum
+        return Ttext2date.sub_sorszám_hétnapja(dt1,dt2,szám,hétnapja)
+
+    def utolsó_hétnapja_dátum(self):             # "utolsó hétvége februárban"
+        szám,hétnapja,dátum = self.outvalues
+        dt1,dt2 = dátum
+        return Ttext2date.sub_sorszám_hétnapja(dt1,dt2,szám,hétnapja)
 
     def dátum_szám(self):                           # "2023 február 5-től 10-ig",  "2023.02.05-10"
         dátum,szám = self.outvalues
@@ -1758,7 +1958,8 @@ class Ttext2date:
         dt1,dt2 = dátum
         if dt2==None or dt2==dt1:           # egyetlen nap
             dátum_minta = self.invalues[0]
-            if endwith(dátum_minta,r'\[szám\]') and szám>=1 and szám<=31:
+            if (endwith(dátum_minta,r'\[szám\]') and szám>=1 and szám<=31 and szám>dt1.day
+                  and self.patternword_utána!='[időtartam]'):
                 try: dtout2=datetime(dt1.year,dt1.month,szám)
                 except: dtout2=None
                 if dtout2!=None: dtout=dt1
@@ -1768,6 +1969,10 @@ class Ttext2date:
     def dátum_dátum(self):                          # "2023 évben május végén",  "2023.02.01 - 2025.03.31",  "2023.február és 2025.január között"
         dátumA,dátumB = self.outvalues
         mintaA,mintaB = self.invalues
+        # ha [elejevége] áll utána, akkor először a "[dátum] [elejevége]" érvényesüljön (csak a másoidk dátummal)
+        if self.patternword_utána=='[elejevége]':
+            dt1,dt2=dátumB      
+            if dt2 and dt2>dt1: return None         # ha dátumB egyetlen nap, akkor mehet tovább 
         return Ttext2date.sub_dátum_dátum(dátumA,mintaA,dátumB,mintaB)
 
     def dátum_dátum_tólig(self):
@@ -1791,8 +1996,8 @@ class Ttext2date:
         return Ttext2date.sub_dátum_dátum(dátumA,mintaA,dátumB,mintaB)
 
 
-methods=Ttext2date()        # egyetlen példány
 
+methods=Ttext2date()        # egyetlen példány:  háttérmetódusok
 
 # MINTÁZATOK
 pattern2method={
@@ -1874,14 +2079,23 @@ pattern2method={
     '[dátum] [szám] [időtartam]': methods.dátum_szám_időtartam,             # "jövő év második félévében", "XIX. század harmadik évtizedében", "február első hetében"
     '[dátum] [szám] [időtartam] [tólig] [szám] [időtartam] [tólig]': methods.dátum_szám_időtartam_tólig_szám_időtartam_tólig,      # "a hét második napjától a negyedik napjáig"
     '[dátum] [szám] [időtartam] [tólig] [szám] [tólig]': methods.dátum_szám_időtartam_tólig_szám_tólig,      # "a hét második napjától a negyedikig"
-    '[dátum] [szám] [szám] [időtartam]': methods.dátum_szám_szám_időtartam,      # "a hét második és negyedik napja között"
+    '[dátum] [szám] [szám] [időtartam]': methods.dátum_szám_szám_időtartam,      # "a hét második és negyedik napja között"   "a hét első két napja"
+    '[szám] [szám] [szám] [időtartam]': methods.szám_szám_szám_időtartam,      # "2020 első két hete"  (kiemelés, mert félreérthető)
+    '[szám] [szám] [időtartam] [dátum]': methods.szám_szám_időtartam_dátum,      # "első négy nap a héten"
+    '[utolsó] [szám] [időtartam] [dátum]': methods.szám_szám_időtartam_dátum,      # "utolsó három nap a héten"
+    '[dátum] [utolsó] [szám] [időtartam]': methods.dátum_szám_szám_időtartam,      #  "a hét utolsó két napja"
     '[dátum] [utolsó] [időtartam]': methods.dátum_utolsó_időtartam,         # "jövő év utolsó napján", "XIX. század utolsó évtizedében", "február első hetében"
+    '[szám] [időtartam] [dátum]': methods.szám_időtartam_dátum,             # "második hét decemberben"
+    '[utolsó] [időtartam] [dátum]': methods.szám_időtartam_dátum,         # "utolsó hét decemberben"
     '[dátum] [szám] [hétnapja]': methods.dátum_szám_hétnapja,               # jövő hónap első hétfőjén"
     '[dátum] [hétnapja]': methods.dátum_hétnapja,                           # jövő hónap második hetében kedden"
     '[dátum] [utolsó] [hétnapja]': methods.dátum_utolsó_hétnapja,           # "február utolsó hétvégéjén"
+    '[szám] [hétnapja] [dátum]': methods.szám_hétnapja_dátum,               # "második hétfő márciusban"
+    '[utolsó] [hétnapja] [dátum]': methods.utolsó_hétnapja_dátum,           # "utolsó munkanap az évben"
     '[dátum] [szám]': methods.dátum_szám,                                   # "2023 februártól 5-től 10-ig",  "2023.02.05-10"
     '[dátum] [dátum]': methods.dátum_dátum,                                 # "2023 évben május végén",  "2023.02.01 - 2025.03.31",  "2023.február és 2025.január között"
     }
+
 
 def fn_teszt(pattern):
     method=pattern2method.get(pattern)
@@ -1961,7 +2175,7 @@ lookup_text2dateG={
     'nap':'időtartam,nap',
 
     'tavasz|tavasszal|a tavasz':'évszak,3',
-    'nyár|nyarán|a nyár':'évszak,6',
+    'nyár|nyará|nyara|a nyár':'évszak,6',
     'ősz|ősszel|az ősz':'évszak,9',
     'tél|telén|a tél':'évszak,12',
 
@@ -1972,11 +2186,11 @@ lookup_text2dateG={
     'most|jelen|ezen|idei|aktuális|e.|ebben|ettől|eddig':'múltjövő,most',
 
 
-    'múlva|ezután|azután|később|rá.|követően':'múlvaezelőtt,múlva',
-    'ezelőtt|azelőtt|korábban|megelőzően':'múlvaezelőtt,ezelőtt',
+    'múlva|ezután|azután|utána|később|rá.':'múlvaezelőtt,múlva',
+    'ezelőtt|azelőtt|előtte|korábban':'múlvaezelőtt,ezelőtt',
 
-    'után':'utánelőtt,után',
-    'előtt':'utánelőtt,előtt',
+    'után|követően':'utánelőtt,után',           # pl. "2020.02.01-t követően"
+    'előtt|megelőzően':'utánelőtt,előtt',
 
     'tól.|től.|kezdődő.|induló.|':'tólig,tól',          # előtte kell egy előfeldolgozás: kötőjeles vagy egybeírt rag leválasztása külön szóként (lásd d_annotate)
     'ig.|záruló.|záródó.|lezáruló.|befejeződő.|végződő.': 'tólig,ig',
@@ -2017,7 +2231,8 @@ lookup_text2dateG={
 
 
 
-    'a.|az.|és.|ezt.|azt.|i.|ai.|ei.|án.|én.|jén.|jei.|ji.|as.|es.|számít|számol|tartó|terjedő':'stopword'    
+    'a.|az.|és.|ezt.|azt.|i.|ai.|ei.|án.|én.|jén.|jei.|ji.|as.|es.|számít|számol|'
+        'tartó|terjedő|naptári|ét.|át.|t.':'stopword'    
                 # számít: "péntektől számítva két nap",  tartó: "decemberig tartó 3 hónap"
     }
 

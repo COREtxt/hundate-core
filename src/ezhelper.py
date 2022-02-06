@@ -131,9 +131,9 @@ def skipaccents(str,level='soft'):
        'hard':  minden ékezetet elhagy
     '''
     if level=='soft':
-        return str.translate(str.maketrans('íóőúű','ioöuü'))
+        return str.translate(str.maketrans('íóőúűÍÓŐÚŰ','ioöuüioöuü'))
     elif level=='hard':
-        return str.translate(str.maketrans('áéíóöőúüű','aeiooouuu'))
+        return str.translate(str.maketrans('áéíóöőúüűÁÉÍÓÖŐÚÜŰ','aeiooouuuaeiooouuu'))
     else:
         return str
 
@@ -172,15 +172,13 @@ def text2int(text,bSerialOk=True,bCleaned=False,tupleout=False):
 
     if text=='': return sub(-1)
 
-    # balról mindenképpen el kell tüntetni a whitespace-eket
-    if not bCleaned:
-        text=text.lstrip()
-        if text=='': return sub(-1)
+    # a szélekről mindenképpen el kell tüntetni a whitespace-eket és pontokat (pont megengedett a végén)
+    text=text.strip('. ')
+    if text=='': return sub(-1)
 
     # ha számjeggyel vagy '-' jellel kezdődik
     c=text[0]
     if c=='-' or c in string.digits:
-        text=text.rstrip('. ')
         try:
             nOut=int(text)
             return sub(nOut,'szám')
@@ -188,18 +186,16 @@ def text2int(text,bSerialOk=True,bCleaned=False,tupleout=False):
             return sub(-1)
 
 
+    # Próbálja meg római számként értelmezni (csak nagybetűket fogad el, és pont lehet a végén)
+    nOut=romaiszam2int(text)
+    if nOut>0: return sub(nOut,'rómaiszám')
+
     if not bCleaned:
         text=clean(text,'hard',True)        # accent hard, ne maradjon whitespace   (viszonylag időigényes, kb 5 mikrosec)
         if text=='': return sub(-1)
 
-    # Próbálja meg római számként értelmezni
-    nOut=romaiszam2int(text)
-    if nOut>0: return sub(nOut,'rómaiszám')
-
-
-    # Ha sorszám is megengedett
     typeout='szám'
-
+    # Ha sorszám is megengedett
     if bSerialOk and ('dik' in text or 'els' in text or endwith(text,'s|stol|sig|son|sen|sban|sben')):
         # lemmatizálás  (nem minden rag, elsősorban a dátumokban előforduló számokra van kiélezve)
         if 'dik' in text: text=endwith(text,'dika|dike|diki|dikai|dikei|dikan|diken|dikaig|dikeig|dikatol|diketol|dikos|dikes|dikas','dik')
@@ -263,10 +259,9 @@ def text2int(text,bSerialOk=True,bCleaned=False,tupleout=False):
 
 def romaiszam2int(text):
     ''' Ha nem római szám, akkor 0
-    kisbetűk is megengedettek'''
-    text=text.lower()
+    Csak nagybetűk megengedettek'''
 
-    roman_numerals = {'i':1, 'v':5, 'x':10, 'l':50, 'c':100, 'd':500, 'm':1000}
+    roman_numerals = {'I':1, 'V':5, 'X':10, 'L':50, 'C':100, 'D':500, 'M':1000}
     result = 0
     try:
         for i,c in enumerate(text):
@@ -495,8 +490,6 @@ def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,ac
     invalues=[]
     outvalues=[]
 
-    dropchars=string.punctuation.replace('.','')        # a '.' karakteren kívüli összes írásjel
-
     # key-felsorolások kibontása (ha nincs még kibontva;  a lookup egy globális objektum, amit egyszer kell csak kibontani)
     if not lookup.get('d_compiled'):
         dict_compiled={'d_compiled':True}     # a d_compiled adat helyből beállítva
@@ -515,16 +508,28 @@ def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,ac
     
 
     strL=strIn
+
+     # ".-"  helyet "-"     Példa:   "5.-én": ne tekintse sorszámnak  (egy helyesírási hiba kijavításáról van szó)
+    strL=strL.replace('.-','-')
+
+    # szeparátor írásejelek helyett egységesen "vessző", külön szóban. Nem annotált szóként tagoló szerepe lesz.
+    #   vessző, pontosvessző, kettős-perjel, függőleges-tagolóvonal
+    strL=strL.replace(',',' vessző ')
+    strL=strL.replace(';',' vessző ')
+    strL=strL.replace(r'//',' vessző ')
+    strL=strL.replace(r'|',' vessző ')
+
     # írásjelek helyett szóközök (kivéve '.')
+    dropchars=string.punctuation.replace('.','')        # a ponton kívüli összes írásjel
     strL=strL.translate(str.maketrans(dropchars,' '*len(dropchars)))
-    # pontok helyett pont + space
+    # pontok helyett pont + space  (külön szavak legyenek, de a szóvégi pontok örződjenek meg. A számok esetén fontos, hogy van-e pont a végén)
     strL=strL.replace('.','. ')
     
-    strL=strL.lower()
+#    strL=strL.lower()   
     strL=skipaccents(strL,accentlevel)
     
     if '[tólig]' in special:
-        strL=re.sub(r'(-jétöl|-átol|-étöl|-tol|-töl|tol|töl)\b',r' tol',strL)
+        strL=re.sub(r'(-jétöl|-átol|-étöl|-tol|-töl|tol|töl)\b',r' tol',strL)   # szóköz kerül elé, külön szó lesz
         strL=re.sub(r'(-jéig|-áig|-éig|-ig|ig)\b',r' ig',strL)
 
 
@@ -549,6 +554,17 @@ def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,ac
                               # Később még ellenőrzöm, hogy ha [időtartam] a következő szó is, akkor [szám]-ra módosuljon az értelmezése (pl. "hét nap")
                 n=text2int(word,True,False)
                 if n>-1:
+                    # ha számjegyekből áll a szám, és a következő szó egy rag, akkor olvassza be a számba
+                    #  ragot
+                    if word.isnumeric() and i<nLen-1:
+                        wordnext=words[i+1]
+                        if wordnext in ['án','én','ján','jén','i','ai','ei','jei','os','as','es','ös',
+                                'dikán','dikén','diki','dikei','dikai','dikos','dikas','dikes',
+                                't','et','at','dikát','dikét',          # "5-öt" nem kezelhető, mert számmal összetéveszthető 
+                                'diká','diké']:     # tól, től ig le lett vágva
+                            word=word + wordnext
+                            i+=1
+
                     invalues.append(word)
                     outvalues.append(n)
                     wordsout.append('[szám]')
@@ -558,7 +574,7 @@ def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,ac
         # max_words_in_samples szóra kell keresni (ha van még ennyi szó)
         i2 = i + max_words_in_samples
         if i2>nLen: i2=nLen
-        tosearch=' '.join(words[i:i2])
+        tosearch=' '.join(words[i:i2]).lower()
         
         key,foundvalue=d_lookup(tosearch,lookup,True)
         if foundvalue:
@@ -571,11 +587,13 @@ def d_annotate(strIn,lookup,special='[szám] [tólig]',max_words_in_samples=2,ac
                 if value=='': value=key
                 if entity!='none': 
                     # Ha az előző szó is [időtartam] volt "hét" input-értékkel, akkor előző szó legyen számként annotálva (pl. "hét nap" "[szám] [időtartam]"
-                    if entity=='időtartam' and len(wordsout)>0 and wordsout[-1]=='[időtartam]' and invalues[-1]=='hét':
+                    #   Ellenpélda: "utolsó hét az évben"   "az év" külön minta
+                    if (entity=='időtartam' and len(wordsout)>0 and wordsout[-1]=='[időtartam]' 
+                        and invalues[-1]=='hét' and not words[i] in ['a','az']):
                         wordsout[-1]='[szám]'
                         outvalues[-1]=7
                     if entity=='szám': value=int(value)
-                    invalues.append(' '.join(words[i:i+nFoundWords]))
+                    invalues.append(' '.join(words[i:i+nFoundWords]).lower())
                     outvalues.append(value)
                     wordout='[' + entity + ']'
                 # Ha a keresőmintához "none" lett megadva entitásként, akkor nem helyettesítőjellel, hanem a szabványosított értékkel
