@@ -7,7 +7,7 @@ pip install hundate
 
 Előfeltétel:  Python 3.7 vagy későbbi
 
-Az ezdate_teszt.py fájl "pip install" nélkül is futtatható (github fájlok letöltés egy mappába, majd az ezdate_teszt.py indítása fájlkezelővel).
+Az ezdate_teszt.py fájl "pip install" nélkül is futtatható (github fájlok letöltése egy mappába, majd az ezdate_teszt.py indítása fájlkezelővel).
 Ebben az esetben azonban előfordulhat, hogy egyedi módon kell telepíteni további python modulokat (numpy, python-dateutil)
 
 ## Importálás
@@ -48,19 +48,22 @@ Említést érdemel még a **Duckling** dátum extraktora. Maga a Duckling jelen
 
 ## Röviden az algoritmusról
 Ha-akkor elágazásokat tartalmazó "hard" programozási módszertan, amely véges sok (hozzávetőleg 50) generalizált mintázatra és azok rekurzív alkalmazására támaszkodik.
-A mintázat keresés első lépése a szám-szavak illetve egy lookup táblázatban megadott időhatározó és relációs szavak (többszavas kifejezések) annotálása. 
+A mintázat-keresés első lépése a szám-szavak illetve egy lookup táblázatban megadott időhatározó és relációs szavak (vagy többszavas kifejezések) annotálása. 
 A mintázatok beazonosítása a csökkenő méretű mozgóablakos pásztázás módszerével történik (a mozógablak mérete a szavak számára utal), és minden sikeres rész-beazonosítást követően újrakezdődik.
 Az NLP terén a legjobb eredményt a neurális hálózat alapú "soft" algoritmusok és a klasszikus "hard" algoritmusok együttes alkalmazásával lehet elérni (az utóbbira példa a jelen szoftver).
 
 ## Példák
+- 'múlt hét keddtől a jövő hét végéig'
+- 'két év múlva októberben'
+- 'két hónappal ezelőtt, 5-én'
+- 'március második hetében hétköznapokon'
 - 'jövő karácsony utáni második hétvégén'
 - '2023 második féléve harmadik hetének elején'
 - 'múlt hét péntek előtti három napon'
 - 'a múlt század közepén',   'a 70-es évek elején'
-- 'két év múlva októberben'
-- 'két hónappal ezelőtt, 5-én'
+- 'Tavaly május 10-én indultak útnak és két hét múlva érkeztek meg.'
 
-  További példák az ezdate_teszt.py fájlban
+  További példák az ezdate_teszt.py fájlban (200 körüli példamondat).
 
 
 ## A modulhoz tartozó függvények
@@ -69,16 +72,15 @@ Az NLP terén a legjobb eredményt a neurális hálózat alapú "soft" algoritmu
 
 ## Függvények részletezése
 
-**text2date**( text, dt0=None, context='', outtype='first' ):
+**text2date**( text, dt0=None, context='', outtype='all' ):
 - **text**:  általában több szavas kifejezés vagy mondat
         A mondatban időhatározókon és számokon kívüli szavak is lehetnek (a dátum bárhol lehet a szövegen belül).
 - **dt0**:  relációs dátummeghatározások esetén a kiinduló dátum.
         Ha nincs megadva, akkor a mai nap.
 - **tense**: 'future' / 'past'.  A nem egyértelmű időmeghatározások esetén jövőbeli vagy múltbeli dátumot preferáljon a függvény
 - **outtype**:
-    - '**first**':    return =  '',   '2021.10.12',  '2021.12.10-2021.12.20'     Az első előforduló dátum vagy dátumtartomány.
-    - '**first+**':   ugyanaz mint a first, de - elemzési-ellenőrzési céllal - a string végére beírja a mintázatot és a helyettesőjelek kimeneti értékét is.\
-              Példa: '2021.10.12   pattern: [szám] [hónapnév] [szám]   outvalues: [2021, 'október', 'tizenkettedike']
-    - '**first_tuple**':   ugyanaz mint a first, de (datetime1,datetime2) a return  (datetime1=None, ha nem talált dátumot;  datetime2=None, ha nem időszak)
     - '**all**':  a szövegben előforduló összes dátum-kifejezés lefordított értékének vesszős felsorolása, az előfordulás sorrendjében\
-              Példa:  '2021.10.12,2021.12.10-2021.12.20'     (a felsorolásban egyedi dátumok és dátumtartományok is előfordulhatnak)
+              Példa:   '2022.05.12, 2021.12.10-2021.12.20'     (a felsorolásban egyedi dátumok vagy dátumtartományok fordulhatnak elő)
+    - '**all+**':  részletező információt is visszaad a beazonosítás folyamatáról  (a beazonosítás ellenőrzésére illetve tesztelésére használható)
+    - '**first**':   csak az első előforduló dátumot vagy dátumtartományt adja vissza   (pl. "2022.05.12" )  
+    - '**tuple**':   ugyanaz mint az "all", de (datetime1,datetime2) formátumban adja vissza a bazonosított dátum-kifejezéseket (datetime2=None, ha a részkifejezés egyetlen dátumból áll)
