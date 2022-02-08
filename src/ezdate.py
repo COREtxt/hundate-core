@@ -1349,7 +1349,7 @@ class Ttext2date:
         
         if yeardiff!=0:
             dtout=fn_dateadd(dtout,yeardiff,'year')
-            dtout2=fn_dateadd(dtout2,yeardiff,'year')
+            if dtout2: dtout2=fn_dateadd(dtout2,yeardiff,'year')
 
         return (dtout,dtout2)
 

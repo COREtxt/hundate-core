@@ -42,19 +42,21 @@ bSzegedAI = False
 
 
 
-# teszteset = '2021. II. 05'
+# teszteset = 'múlt szilveszter előtt egy héttel'
 # out = text2date(teszteset, outtype='all+')
 # print(teszteset + '\n' + str(out))
-# exit()
+# # exit()
 
 
 
-fn_printteszt('ISSUE1', [
+fn_printteszt('ISSUE', [
     'február 5. utáni első hétköznap',
     'február 5 utáni első hétköznap',
     'jövő héten kedd-szerda',
     'halottak napja utáni szombat',
-    'jövő héten kedd vagy szerda'
+    'jövő héten kedd vagy szerda',
+    'két héttel ezelőtt',
+    'múlt szilveszter után egy héttel'
 ], bSzegedAI)
 
 
